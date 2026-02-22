@@ -188,7 +188,12 @@ setClass(
     icwres="numeric",		# vector of individual weighted residuals with conditional estimates
     wres="numeric",		# vector of WRES (population weighted residuals)
     npde="numeric",		# vector of npde
-    pd="numeric"		# vector of prediction discrepancies
+    pd="numeric",		# vector of prediction discrepancies
+# IOV results
+    psi.iov="matrix",		# estimated IOV variance-covariance matrix (Psi)
+    beta.occ="matrix",		# estimated occasion fixed effects (K x nb.parameters)
+    name.iov="character",	# names of IOV parameters
+    indx.iov="numeric"		# indices of parameters with IOV
   ),
   validity=function(object){
 #    cat ("--- Checking SaemixRes object ---\n")
@@ -361,6 +366,10 @@ setMethod(
     "wres"={return(x@wres)},
     "npde"={return(x@npde)},
     "pd"={return(x@pd)},
+    "psi.iov"={return(x@psi.iov)},
+    "beta.occ"={return(x@beta.occ)},
+    "name.iov"={return(x@name.iov)},
+    "indx.iov"={return(x@indx.iov)},
     stop("No such attribute\n")
    )
   }
@@ -445,6 +454,10 @@ setReplaceMethod(
     "wres"={x@wres<-value},
     "npde"={x@npde<-value},
     "pd"={x@pd<-value},
+    "psi.iov"={x@psi.iov<-value},
+    "beta.occ"={x@beta.occ<-value},
+    "name.iov"={x@name.iov<-value},
+    "indx.iov"={x@indx.iov<-value},
     stop("No such attribute\n")
    )
 #   validObject(x)
@@ -558,6 +571,30 @@ setMethod("print","SaemixRes",
     }
     try(colnames(tab)<-rownames(tab)<-x@name.random)
     print(tab,quote=FALSE)
+    if(length(x@indx.iov)>0) {
+    cat("----------------------------------------------------\n")
+    cat("------  IOV: Inter-Occasion Variability  -----------\n")
+    cat("----------------------------------------------------\n")
+    cat("Variance of IOV random effects (Psi):\n")
+    tab.iov<-cbind(x@name.iov, diag(x@psi.iov)[x@indx.iov])
+    colnames(tab.iov)<-c("Parameter","Estimate")
+    if(digits>0) {
+      tab.iov[,2]<-format(as.double(as.character(tab.iov[,2])),digits=digits)
+    }
+    print(tab.iov,quote=FALSE)
+    if(nrow(x@beta.occ)>1) {
+      cat("\nOccasion fixed effects (beta_k, reference=occasion 1):\n")
+      tab.beta<-x@beta.occ
+      if(!is.null(colnames(tab.beta))) {
+        colnames(tab.beta)<-colnames(tab.beta)
+      }
+      rownames(tab.beta)<-paste0("Occ.",1:nrow(tab.beta))
+      if(digits>0) {
+        tab.beta<-apply(tab.beta, c(1,2), function(v) format(as.double(v), digits=digits))
+      }
+      print(tab.beta,quote=FALSE)
+    }
+    }
     if(length(x@ll.lin)>0 | length(x@ll.is)>0 | length(x@ll.gq)>0) {
     cat("----------------------------------------------------\n")
     cat("---------------  Statistical criteria  -------------\n")
@@ -689,6 +726,22 @@ setMethod("show","SaemixRes",
       tab[,i]<-format(as.double(as.character(tab[,i])),digits=3)
     try(colnames(tab)<-rownames(tab)<-object@name.random)
     print(tab,quote=FALSE)
+    }
+    if(length(object@indx.iov)>0) {
+    cat("\nIOV: Inter-Occasion Variability\n")
+    cat("Variance of IOV random effects (Psi):\n")
+    tab.iov<-cbind(object@name.iov, diag(object@psi.iov)[object@indx.iov])
+    colnames(tab.iov)<-c("Parameter","Estimate")
+    tab.iov[,2]<-format(as.double(as.character(tab.iov[,2])),digits=3)
+    rownames(tab.iov)<-rep("",nrow(tab.iov))
+    print(tab.iov,quote=FALSE)
+    if(nrow(object@beta.occ)>1) {
+      cat("\nOccasion fixed effects (beta_k, reference=occasion 1):\n")
+      tab.beta<-object@beta.occ
+      rownames(tab.beta)<-paste0("Occ.",1:nrow(tab.beta))
+      tab.beta<-apply(tab.beta, c(1,2), function(v) format(as.double(v), digits=3))
+      print(tab.beta,quote=FALSE)
+    }
     }
     if(length(object@ll.lin)>0 | length(object@ll.is)>0 | length(object@ll.gq)>0) {
       cat("\nStatistical criteria\n")

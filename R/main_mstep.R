@@ -1,8 +1,8 @@
 ################## Stochastic approximation - compute sufficient statistics (M-step) #####################
-mstep<-function(kiter, Uargs, Dargs, opt, structural.model, DYF, phiM, varList, phi, betas, suffStat) {
+mstep<-function(kiter, Uargs, Dargs, opt, structural.model, DYF, phiM, varList, phi, betas, suffStat, gammaM=NULL, beta.occ=NULL) {
 	# M-step - stochastic approximation
 	# Input: kiter, Uargs, structural.model, DYF, phiM (unchanged)
-	# Output: varList, phi, betas, suffStat (changed)
+	# Output: varList, phi, betas, suffStat (changed), and optionally beta.occ for IOV
 	#					mean.phi (created)
 
 	# Update variances - TODO - check if here or elsewhere
@@ -16,8 +16,20 @@ mstep<-function(kiter, Uargs, Dargs, opt, structural.model, DYF, phiM, varList, 
 	d2.omega<-d1.omega%*%t(Uargs$LCOV[,varList$ind.eta])
 	comega<-Uargs$COV2*d2.omega
 
-	psiM<-transphi(phiM,Dargs$transform.par)
-	fpred<-structural.model(psiM, Dargs$IdM, Dargs$XM)
+	# Compute predictions (IOV-aware when applicable)
+	if(Dargs$has.iov && !is.null(gammaM)) {
+		# Build observation-level phi including IOV effects
+		i1.iov<-Uargs$i1.iov
+		phiM.obs<-phiM[Dargs$IdM, ]
+		gamma.obs<-matrix(0, nrow=length(Dargs$yM), ncol=Uargs$nb.parameters)
+		gamma.obs[, i1.iov]<-gammaM[Dargs$idocc.of.obsM, , drop=FALSE]
+		phiM.obs<-phiM.obs + gamma.obs + beta.occ[Dargs$occM, , drop=FALSE]
+		psiM<-transphi(phiM.obs, Dargs$transform.par)
+		fpred<-structural.model(psiM, 1:length(Dargs$yM), Dargs$XM)
+	} else {
+		psiM<-transphi(phiM,Dargs$transform.par)
+		fpred<-structural.model(psiM, Dargs$IdM, Dargs$XM)
+	}
   	for(ityp in Dargs$etype.exp) fpred[Dargs$XM$ytype==ityp]<-log(cutoff(fpred[Dargs$XM$ytype==ityp]))
 #	if(Dargs$error.model=="exponential")
 #		fpred<-log(cutoff(fpred))
@@ -94,6 +106,70 @@ mstep<-function(kiter, Uargs, Dargs, opt, structural.model, DYF, phiM, varList, 
 	}
 	varList$omega<-varList$omega-mydiag(mydiag(varList$omega))+mydiag(varList$diag.omega)
 
+	# === IOV: Psi estimation and beta.occ update ===
+	if(Dargs$has.iov && !is.null(gammaM)) {
+		nb.iovas<-Uargs$nb.iovas
+		i1.iov<-Uargs$i1.iov
+		nocc<-Dargs$nocc
+		nchains<-Uargs$nchains
+
+		# --- Psi estimation from gamma cross-products ---
+		stat.gamma2<-matrix(0, nrow=nb.iovas, ncol=nb.iovas)
+		for(k in 1:nchains) {
+			range.occ<-((k-1)*Dargs$N.occ+1):(k*Dargs$N.occ)
+			gamma.k<-gammaM[range.occ, , drop=FALSE]
+			stat.gamma2<-stat.gamma2 + t(gamma.k) %*% gamma.k
+		}
+		stat.gamma2.avg<-stat.gamma2 / (nchains * Dargs$N.occ)
+
+		# SA update for gamma sufficient statistics
+		if(is.numeric(suffStat$stat.gamma2) && length(suffStat$stat.gamma2)==1 && suffStat$stat.gamma2==0)
+			suffStat$stat.gamma2<-stat.gamma2.avg
+		suffStat$stat.gamma2<-suffStat$stat.gamma2 + opt$stepsize[kiter] * (stat.gamma2.avg - suffStat$stat.gamma2)
+
+		# Update Psi matrix
+		psi.full<-matrix(0, nrow=Uargs$nb.parameters, ncol=Uargs$nb.parameters)
+		psi.full[i1.iov, i1.iov]<-suffStat$stat.gamma2
+		varList$psi.iov[Uargs$indest.iov]<-psi.full[Uargs$indest.iov]
+
+		# Simulated annealing for Psi (same scheme as for Omega)
+		if(kiter <= opt$nbiter.sa) {
+			diag.psi.full<-mydiag(psi.full)
+			vec1<-diag.psi.full[i1.iov]
+			vec2<-varList$diag.psi[i1.iov] * opt$alpha1.sa
+			idx<-as.integer(vec1 < vec2)
+			varList$diag.psi[i1.iov]<-idx*vec2 + (1-idx)*vec1
+		} else {
+			varList$diag.psi<-mydiag(varList$psi.iov)
+		}
+		varList$psi.iov<-varList$psi.iov - mydiag(mydiag(varList$psi.iov)) + mydiag(varList$diag.psi)
+
+		# --- beta.occ estimation ---
+		# For each occasion k, compute the mean of gamma across subjects
+		# This absorbs the occasion-specific mean of gamma into beta.occ
+		stat.beta.occ<-matrix(0, nrow=nocc, ncol=Uargs$nb.parameters)
+		for(k in 1:nchains) {
+			range.occ<-((k-1)*Dargs$N.occ+1):(k*Dargs$N.occ)
+			gamma.k<-gammaM[range.occ, , drop=FALSE]
+			occ.k<-Dargs$occ.of.idoccM[range.occ]
+			for(iocc in 1:nocc) {
+				idx.occ<-which(occ.k == iocc)
+				if(length(idx.occ) > 0) {
+					gamma.expand<-matrix(0, nrow=length(idx.occ), ncol=Uargs$nb.parameters)
+					gamma.expand[, i1.iov]<-gamma.k[idx.occ, , drop=FALSE]
+					stat.beta.occ[iocc, ]<-stat.beta.occ[iocc, ] + colMeans(gamma.expand)
+				}
+			}
+		}
+		stat.beta.occ<-stat.beta.occ / nchains
+
+		# SA update for beta.occ
+		beta.occ<-beta.occ + opt$stepsize[kiter] * stat.beta.occ
+		# Constrain: beta.occ[1,] = 0 (reference occasion)
+		beta.shift<-beta.occ[1, ]
+		beta.occ<-sweep(beta.occ, 2, beta.shift)
+	}
+
 	# Residual error
 	# Modified to add SA to constant and exponential residual error models (Edouard Ollier 10/11/2016)
 	if(Dargs$modeltype=="structural") {
@@ -133,5 +209,5 @@ mstep<-function(kiter, Uargs, Dargs, opt, structural.model, DYF, phiM, varList, 
 		    }
 		  }
 	}
-	return(list(varList=varList,mean.phi=mean.phi,phi=phi,betas=betas,suffStat=suffStat))
+	return(list(varList=varList,mean.phi=mean.phi,phi=phi,betas=betas,suffStat=suffStat,beta.occ=beta.occ))
 }

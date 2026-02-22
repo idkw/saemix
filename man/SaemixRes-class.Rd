@@ -21,6 +21,8 @@ An object of the SaemixRes class, representing the results of a fit through the 
 
 \item{\code{name.fixed}}{a vector containing the names of the fixed parameters in the model}
 
+\item{\code{name.iov}}{a character vector giving the names of IOV parameters}
+
 \item{\code{name.random}}{a vector containing the names of the random parameters in the model}
 
 \item{\code{name.sigma}}{a vector containing the names of the parameters of the residual error model}
@@ -38,6 +40,8 @@ An object of the SaemixRes class, representing the results of a fit through the 
 \item{\code{betas}}{a vector giving the estimated mu}
 
 \item{\code{betaC}}{a vector with the estimates of the fixed effects for covariates}
+
+\item{\code{beta.occ}}{a matrix giving the estimated occasion fixed effects (K x nb.parameters)}
 
 \item{\code{omega}}{the estimated variance-covariance matrix}
 
@@ -60,6 +64,8 @@ An object of the SaemixRes class, representing the results of a fit through the 
 \item{\code{allpar}}{a matrix tracking the estimates of all the parameters (including covariate effects) at each iteration}
 
 \item{\code{indx.fix}}{the index of the fixed parameters (used in the estimation algorithm)}
+
+\item{\code{indx.iov}}{a numeric vector giving the indices of parameters with IOV}
 
 \item{\code{indx.cov}}{the index of the covariance parameters (used in the estimation algorithm)}
 
@@ -96,6 +102,8 @@ An object of the SaemixRes class, representing the results of a fit through the 
 \item{\code{phi.samp}}{a three-dimensional array with samples of phi from the conditional distribution}
 
 \item{\code{phi.samp.var}}{a three-dimensional array with the variance of phi}
+
+\item{\code{psi.iov}}{a matrix giving the estimated IOV variance-covariance matrix (Psi)}
 
 \item{\code{ll.lin}}{log-likelihood computed by lineariation}
 

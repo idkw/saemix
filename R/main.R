@@ -143,19 +143,33 @@ saemix<-function(model,data,control=list()) {
   betas<-betas.ini<-xinit$betas
   fixed.psi<-xinit$fixedpsi.ini
   var.eta<-varList$diag.omega
+  gammaM<-xinit$gammaM
+  beta.occ<-xinit$beta.occ
+
+  # IOV column names for tracking
+  has.iov<-Dargs$has.iov
+  if(has.iov) {
+    name.iov<-saemix.model["name.iov"]
+    i1.iov<-Uargs$i1.iov
+    var.iov<-varList$diag.psi
+  } else {
+    name.iov<-character(0)
+    i1.iov<-integer(0)
+    var.iov<-numeric(0)
+  }
 
   if (Dargs$modeltype=="structural"){
-    theta0<-c(fixed.psi,var.eta[Uargs$i1.omega2],varList$pres[Uargs$ind.res])
-  parpop<-matrix(data=0,nrow=(saemix.options$nbiter.tot+1),ncol=(Uargs$nb.parameters+length(Uargs$i1.omega2)+length(saemix.model["indx.res"])))
-  colnames(parpop)<-c(saemix.model["name.modpar"], saemix.model["name.random"], saemix.model["name.sigma"][saemix.model["indx.res"]])
-  allpar<-matrix(data=0,nrow=(saemix.options$nbiter.tot+1), ncol=(Uargs$nb.betas+length(Uargs$i1.omega2)+length(saemix.model["indx.res"])))
-  colnames(allpar)<-c(saemix.model["name.fixed"],saemix.model["name.random"], saemix.model["name.sigma"][saemix.model["indx.res"]])
+    theta0<-c(fixed.psi,var.eta[Uargs$i1.omega2],var.iov[i1.iov],varList$pres[Uargs$ind.res])
+  parpop<-matrix(data=0,nrow=(saemix.options$nbiter.tot+1),ncol=(Uargs$nb.parameters+length(Uargs$i1.omega2)+length(i1.iov)+length(saemix.model["indx.res"])))
+  colnames(parpop)<-c(saemix.model["name.modpar"], saemix.model["name.random"], name.iov, saemix.model["name.sigma"][saemix.model["indx.res"]])
+  allpar<-matrix(data=0,nrow=(saemix.options$nbiter.tot+1), ncol=(Uargs$nb.betas+length(Uargs$i1.omega2)+length(i1.iov)+length(saemix.model["indx.res"])))
+  colnames(allpar)<-c(saemix.model["name.fixed"],saemix.model["name.random"], name.iov, saemix.model["name.sigma"][saemix.model["indx.res"]])
   } else{
-    theta0<-c(fixed.psi,var.eta[Uargs$i1.omega2])
-    parpop<-matrix(data=0,nrow=(saemix.options$nbiter.tot+1),ncol=(Uargs$nb.parameters+length(Uargs$i1.omega2)))
-    colnames(parpop)<-c(saemix.model["name.modpar"], saemix.model["name.random"])
-    allpar<-matrix(data=0,nrow=(saemix.options$nbiter.tot+1), ncol=(Uargs$nb.betas+length(Uargs$i1.omega2)))
-    colnames(allpar)<-c(saemix.model["name.fixed"],saemix.model["name.random"])
+    theta0<-c(fixed.psi,var.eta[Uargs$i1.omega2],var.iov[i1.iov])
+    parpop<-matrix(data=0,nrow=(saemix.options$nbiter.tot+1),ncol=(Uargs$nb.parameters+length(Uargs$i1.omega2)+length(i1.iov)))
+    colnames(parpop)<-c(saemix.model["name.modpar"], saemix.model["name.random"], name.iov)
+    allpar<-matrix(data=0,nrow=(saemix.options$nbiter.tot+1), ncol=(Uargs$nb.betas+length(Uargs$i1.omega2)+length(i1.iov)))
+    colnames(allpar)<-c(saemix.model["name.fixed"],saemix.model["name.random"], name.iov)
   }
   
   parpop[1,]<-theta0
@@ -170,6 +184,7 @@ saemix<-function(model,data,control=list()) {
   
 # List of sufficient statistics - change during call to stochasticApprox
   suffStat<-list(statphi1=0,statphi2=0,statphi3=0,statrese=0)
+  if(has.iov) suffStat$stat.gamma2<-0
   phi<-array(data=0,dim=c(Dargs$N, Uargs$nb.parameters, saemix.options$nb.chains))
 
 # structural model, check nb of parameters
@@ -195,30 +210,33 @@ saemix<-function(model,data,control=list()) {
   	ind.prov<-!(varList$ind.eta %in% Uargs$i0.omega2)
   	varList$domega2<-varList$domega2[ind.prov,ind.prov,drop=FALSE] # keep in domega2 only indices of parameters with IIV
   	varList$ind0.eta<-Uargs$i0.omega2
-  	varList$ind.eta<-1:(Uargs$nb.parameters)  	
+  	varList$ind.eta<-1:(Uargs$nb.parameters)
   	if(length(varList$ind0.eta)>0) varList$ind.eta<-varList$ind.eta[!(varList$ind.eta %in% varList$ind0.eta)] # update ind.eta, now only parameters with IIV
   	Uargs$nb.etas<-length(varList$ind.eta)
   	suffStat$statphi1<-0
   	suffStat$statphi2<-0
   	suffStat$statphi3<-0
+  	if(has.iov) suffStat$stat.gamma2<-0
   }
 
 	# E-step
-  xmcmc<-estep(kiter, Uargs, Dargs, opt, mean.phi, varList, DYF, phiM)
+  xmcmc<-estep(kiter, Uargs, Dargs, opt, mean.phi, varList, DYF, phiM, gammaM, beta.occ)
   varList<-xmcmc$varList
   DYF<-xmcmc$DYF
   phiM<-xmcmc$phiM
+  gammaM<-xmcmc$gammaM
   #  psiM<-transphi(phiM,saemix.model["transform.par"])
   
   # M-step
   if(opt$stepsize[kiter]>0) {
 ############# Stochastic Approximation
-  	xstoch<-mstep(kiter, Uargs, Dargs, opt, structural.model, DYF, phiM, varList, phi, betas, suffStat)
+  	xstoch<-mstep(kiter, Uargs, Dargs, opt, structural.model, DYF, phiM, varList, phi, betas, suffStat, gammaM, beta.occ)
   	varList<-xstoch$varList
   	mean.phi<-xstoch$mean.phi
   	phi<-xstoch$phi
   	betas<-xstoch$betas
   	suffStat<-xstoch$suffStat
+  	if(has.iov) beta.occ<-xstoch$beta.occ
   	
   	beta.I<-betas[Uargs$indx.betaI]
   	fixed.psi<-transphi(matrix(beta.I,nrow=1),saemix.model["transform.par"])
@@ -228,19 +246,20 @@ saemix<-function(model,data,control=list()) {
   	l1[Uargs$indx.betaI]<-fixed.psi
   	l1[Uargs$indx.betaC]<-betaC
 
+    if(has.iov) var.iov<-mydiag(varList$psi.iov)
     if(Dargs$modeltype=="structural") {
-  	allpar[(kiter+1),]<-c(l1,var.eta[Uargs$i1.omega2],varList$pres[Uargs$ind.res])
+  	allpar[(kiter+1),]<-c(l1,var.eta[Uargs$i1.omega2],var.iov[i1.iov],varList$pres[Uargs$ind.res])
     } else{
-      allpar[(kiter+1),]<-c(l1,var.eta[Uargs$i1.omega2])
+      allpar[(kiter+1),]<-c(l1,var.eta[Uargs$i1.omega2],var.iov[i1.iov])
     }
 
   } else { #end of loop on if(opt$stepsize[kiter]>0)
     allpar[(kiter+1),]<-allpar[kiter,]
   }
    if(Dargs$modeltype=="structural") {
-  theta<-c(fixed.psi,var.eta[Uargs$i1.omega2],varList$pres[Uargs$ind.res])
+  theta<-c(fixed.psi,var.eta[Uargs$i1.omega2],var.iov[i1.iov],varList$pres[Uargs$ind.res])
     } else{
-      theta<-c(fixed.psi,var.eta[Uargs$i1.omega2])
+      theta<-c(fixed.psi,var.eta[Uargs$i1.omega2],var.iov[i1.iov])
     }
   # End of loop on kiter
   }
@@ -300,7 +319,15 @@ saemix<-function(model,data,control=list()) {
   saemix.res["cond.mean.psi"]<-cond.mean.psi
   saemix.res["cond.mean.eta"]<-cond.mean.eta
   saemix.res["cond.shrinkage"]<- shrinkage
-  
+
+  # IOV results
+  if(has.iov) {
+    saemix.res["psi.iov"]<-varList$psi.iov
+    saemix.res["beta.occ"]<-beta.occ
+    saemix.res["name.iov"]<-saemix.model["name.iov"]
+    saemix.res["indx.iov"]<-saemix.model["indx.iov"]
+  }
+
 # Updating elements of saemixObject
   saemixObject["model"]<-saemix.model
   saemixObject["results"]<-saemix.res

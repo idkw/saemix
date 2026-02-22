@@ -240,7 +240,7 @@ compute.sres<-function(saemixObject) {
 #' @aliases normcdf norminv
 #' @aliases error error.typ ssq
 #' @aliases transpsi transphi derivphi dtransphi
-#' @aliases compute.Uy compute.LLy conditional.distribution trnd.mlx gammarnd.mlx tpdf.mlx
+#' @aliases compute.Uy compute.LLy compute.LLy.iov conditional.distribution trnd.mlx gammarnd.mlx tpdf.mlx
 #' @aliases conditional.distribution_c conditional.distribution_d
 #' 
 #' @keywords internal

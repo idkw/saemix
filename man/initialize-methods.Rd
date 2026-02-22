@@ -52,6 +52,8 @@
   omega.init,
   error.init,
   name.modpar,
+  covariance.model.iov,
+  omega.init.iov,
   verbose = TRUE
 )
 
@@ -172,6 +174,13 @@ the error model. Defaults to 1 for each estimated parameter in the error model}
 
 \item{name.modpar}{names of the model parameters, if they are not given as
 the column names (or names) of psi0}
+
+\item{covariance.model.iov}{a matrix of 0s and 1s of the same size as the covariance model,
+indicating the structure of the IOV (Inter-Occasion Variability) variance-covariance matrix Psi.
+Defaults to a zero matrix (no IOV)}
+
+\item{omega.init.iov}{a square matrix giving the initial estimate for the IOV
+variance-covariance matrix Psi. Defaults to the identity matrix}
 
 \item{status}{string indicating whether a model has been run successfully; set to "empty" at initialisation, used to pass on error messages or fit status}
 

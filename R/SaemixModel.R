@@ -136,6 +136,10 @@ setClass(
     betaest.model="matrix",	# 1st line=ones, next lines=covariate model
     covariance.model="matrix",	# covariance model
     omega.init="matrix",	# CI for Omega
+    covariance.model.iov="matrix",	# IOV covariance structure (0/1 matrix, npar x npar)
+    omega.init.iov="matrix",	# initial estimate for IOV variance-covariance matrix (Psi)
+    indx.iov="numeric",	# indices of parameters with IOV
+    name.iov="character",	# names of IOV parameters (e.g., "psi2.ka")
     error.init="numeric",	# CI for residual error
     nb.parameters="integer",	# nb of parameters in the model
     name.modpar="character",	# name of parameters in the model (columns of psi0)
@@ -254,7 +258,7 @@ setClass(
 setMethod(
   f="initialize",
   signature="SaemixModel",
-  definition=function(.Object, model, description, modeltype,psi0, name.response, name.sigma, transform.par,fixed.estim, error.model,covariate.model,covariance.model,omega.init,error.init, name.modpar, verbose=TRUE){
+  definition=function(.Object, model, description, modeltype,psi0, name.response, name.sigma, transform.par,fixed.estim, error.model,covariate.model,covariance.model,omega.init,error.init, name.modpar, covariance.model.iov, omega.init.iov, verbose=TRUE){
 #    cat ("--- initialising SaemixModel Object --- \n")
     if(missing(name.response)) name.response<-""
     if(missing(modeltype)) modeltype<-rep("structural",length(name.response))
@@ -362,6 +366,50 @@ setMethod(
 #			if(sum(mydiag(.Object@covariance.model))==0) cat("At least one parameter with IIV must be included in the model.\n") else cat("At least one parameter with IIV must be estimated and not fixed in the model.\n")
 			return(.Object)
 		}
+
+    # IOV (Inter-Occasion Variability) structure
+    if(missing(covariance.model.iov) || length(covariance.model.iov)==0) {
+      covariance.model.iov<-matrix(0, nrow=npar, ncol=npar)
+    }
+    if(dim(covariance.model.iov)[1]!=npar || dim(covariance.model.iov)[2]!=npar) {
+      if(verbose) message("Error: covariance.model.iov must be a square matrix of size equal to the number of parameters.\n")
+      covariance.model.iov<-matrix(0, nrow=npar, ncol=npar)
+    }
+    # Validate: only parameters with IIV can have IOV
+    indx.iov<-which(mydiag(covariance.model.iov)>0)
+    if(length(indx.iov)>0) {
+      invalid.iov<-setdiff(indx.iov, indx.omega)
+      if(length(invalid.iov)>0) {
+        if(verbose) message("Warning: IOV can only be specified for parameters with IIV. Removing IOV for parameters: ", paste(colnames(psi0)[invalid.iov], collapse=", "), "\n")
+        covariance.model.iov[invalid.iov,]<-0
+        covariance.model.iov[,invalid.iov]<-0
+        indx.iov<-which(mydiag(covariance.model.iov)>0)
+      }
+    }
+    if(is.null(colnames(covariance.model.iov))) colnames(covariance.model.iov)<-rownames(covariance.model.iov)<-colnames(psi0)
+    .Object@covariance.model.iov<-covariance.model.iov
+    .Object@indx.iov<-indx.iov
+    if(length(indx.iov)>0) {
+      .Object@name.iov<-paste0("psi2.",colnames(psi0)[indx.iov])
+    } else {
+      .Object@name.iov<-character(0)
+    }
+    # IOV initial variance-covariance matrix
+    if(missing(omega.init.iov) || length(omega.init.iov)==0) {
+      if(length(indx.iov)>0) {
+        omega.init.iov<-matrix(0, nrow=npar, ncol=npar)
+        diag(omega.init.iov)[indx.iov]<-1
+      } else {
+        omega.init.iov<-matrix(0, nrow=npar, ncol=npar)
+      }
+    }
+    if(dim(omega.init.iov)[1]!=npar || dim(omega.init.iov)[2]!=npar) {
+      if(verbose) message("Warning: omega.init.iov must be a square matrix of size equal to the number of parameters. Setting to default.\n")
+      omega.init.iov<-matrix(0, nrow=npar, ncol=npar)
+      if(length(indx.iov)>0) diag(omega.init.iov)[indx.iov]<-1
+    }
+    if(is.null(colnames(omega.init.iov))) colnames(omega.init.iov)<-rownames(omega.init.iov)<-colnames(psi0)
+    .Object@omega.init.iov<-omega.init.iov
 
 ## Residual Error model.
 # error models are a + bf described by [a b]
@@ -480,6 +528,10 @@ setMethod(
     "indx.cov"={return(x@indx.cov)},
     "indx.omega"={return(x@indx.omega)},
     "indx.res"={return(x@indx.res)},
+    "covariance.model.iov"={return(x@covariance.model.iov)},
+    "omega.init.iov"={return(x@omega.init.iov)},
+    "indx.iov"={return(x@indx.iov)},
+    "name.iov"={return(x@name.iov)},
     "Mcovariates"={return(x@Mcovariates)},
     stop("No such attribute\n")
    )
@@ -518,6 +570,10 @@ setReplaceMethod(
     "indx.cov"={x@indx.cov<-value},
     "indx.omega"={x@indx.omega<-value},
     "indx.res"={x@indx.res<-value},
+    "covariance.model.iov"={x@covariance.model.iov<-value},
+    "omega.init.iov"={x@omega.init.iov<-value},
+    "indx.iov"={x@indx.iov<-value},
+    "name.iov"={x@name.iov<-value},
     "Mcovariates"={x@Mcovariates<-value},
     stop("No such attribute\n")
    )
@@ -557,6 +613,10 @@ setMethod("print","SaemixModel",
     tab<-x@covariance.model
 #    try(colnames(tab)<-rownames(tab)<-x@name.modpar)
     print(tab,quote=FALSE)
+    if(length(x@indx.iov)>0) {
+      cat("  IOV variance-covariance structure:\n")
+      print(x@covariance.model.iov,quote=FALSE)
+    }
     st1<-paste(x@name.sigma,x@error.init,sep="=")
     for(i in 1:length(x@modeltype)) {
       i1<-0
@@ -1250,7 +1310,7 @@ setMethod("plot",c("SaemixModel","SaemixData"),
 #' 
 #' @export saemixModel
 
-saemixModel<-function(model,psi0,description="",modeltype ="structural", name.response="", name.sigma=character(), error.model=character(), transform.par=numeric(),fixed.estim=numeric(),covariate.model=matrix(nrow=0,ncol=0), covariance.model=matrix(nrow=0,ncol=0),omega.init=matrix(nrow=0,ncol=0),error.init=numeric(), name.modpar=character(), simulate.function=NULL, verbose=TRUE) {
+saemixModel<-function(model,psi0,description="",modeltype ="structural", name.response="", name.sigma=character(), error.model=character(), transform.par=numeric(),fixed.estim=numeric(),covariate.model=matrix(nrow=0,ncol=0), covariance.model=matrix(nrow=0,ncol=0),omega.init=matrix(nrow=0,ncol=0),error.init=numeric(), name.modpar=character(), simulate.function=NULL, covariance.model.iov=matrix(nrow=0,ncol=0), omega.init.iov=matrix(nrow=0,ncol=0), verbose=TRUE) {
 # Creating model from class
   if(missing(model)) {
     if(verbose) cat("Error in saemixModel:\n   The model must be a function, accepting 3 arguments: psi (a vector of parameters), id (a vector of indices) and xidep (a matrix of predictors). Please see the documentation for examples.\n")
@@ -1306,7 +1366,7 @@ saemixModel<-function(model,psi0,description="",modeltype ="structural", name.re
   if(is.null(colnames(psi0))) {
     if(verbose) cat("Warning: no names given for the parameters in the model, please consider including parameter names.\n")
   }
-  xmod<-try(new(Class="SaemixModel",model=model,description=description , modeltype=modeltype,psi0=psi0, name.response=name.response, name.sigma=name.sigma, error.model=error.model, transform.par=transform.par,fixed.estim=fixed.estim, covariate.model=covariate.model,covariance.model=covariance.model, omega.init=omega.init,error.init=error.init,name.modpar=name.modpar))
+  xmod<-try(new(Class="SaemixModel",model=model,description=description , modeltype=modeltype,psi0=psi0, name.response=name.response, name.sigma=name.sigma, error.model=error.model, transform.par=transform.par,fixed.estim=fixed.estim, covariate.model=covariate.model,covariance.model=covariance.model, omega.init=omega.init,error.init=error.init,name.modpar=name.modpar, covariance.model.iov=covariance.model.iov, omega.init.iov=omega.init.iov))
   if(is(xmod,"SaemixModel")) x1<-try(validObject(xmod),silent=FALSE) else x1<-xmod
   if(!inherits(x1,"try-error")) {
     if(verbose) cat("\n\nThe following SaemixModel object was successfully created:\n\n")

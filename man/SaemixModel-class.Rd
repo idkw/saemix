@@ -27,7 +27,11 @@ An object of the SaemixModel class can be created by using the function \code{\l
 \item{\code{error.model}:}{Object of class \code{"character"}: name of the error model. Valid choices are "constant" (default), "proportional" and "combined" (see equations in User Guide, except for combined which was changed to y = f + sqrt(a^2+b^2*f^2)*e )}
 \item{\code{covariate.model}:}{Object of class \code{"matrix"}: a matrix of 0's and 1's, with a 1 indicating that a parameter-covariate relationship is included in the model (and an associated fixed effect will be estimated). The nmuber of columns should be equal to the number of parameters in the model and the number of rows to the number of covariates.}
 \item{\code{covariance.model}:}{Object of class \code{"matrix"}: a matrix f 0's and 1's giving the structure of the variance-covariance matrix. Defaults to the Identity matrix (diagonal IIV, no correlations between parameters)}
+\item{\code{covariance.model.iov}:}{Object of class \code{"matrix"}: a matrix of 0's and 1's indicating the structure of the IOV variance-covariance matrix (0/1)}
+\item{\code{indx.iov}:}{Object of class \code{"numeric"}: indices of parameters with IOV}
+\item{\code{name.iov}:}{Object of class \code{"character"}: names of IOV parameters}
 \item{\code{omega.init}:}{Object of class \code{"matrix"}: a matrix giving the initial estimate for the variance-covariance matrix}
+\item{\code{omega.init.iov}:}{Object of class \code{"matrix"}: a matrix giving the initial IOV variance-covariance matrix}
 \item{\code{error.init}:}{Object of class \code{"numeric"}: a vector giving the initial estimate for the parameters of the residual error}
 }
 Additional elements are added to the model object after a call to \code{saemix} and are used in the algorithm.

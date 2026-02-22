@@ -19,6 +19,7 @@
 \alias{dtransphi}
 \alias{compute.Uy}
 \alias{compute.LLy}
+\alias{compute.LLy.iov}
 \alias{conditional.distribution}
 \alias{trnd.mlx}
 \alias{gammarnd.mlx}

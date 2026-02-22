@@ -20,6 +20,8 @@ saemixModel(
   error.init = numeric(),
   name.modpar = character(),
   simulate.function = NULL,
+  covariance.model.iov = matrix(nrow = 0, ncol = 0),
+  omega.init.iov = matrix(nrow = 0, ncol = 0),
   verbose = TRUE
 )
 }
@@ -65,9 +67,15 @@ parameters in the model, giving the variance-covariance matrix of the model:
 1s correspond to estimated variances (in the diagonal) or covariances
 (off-diagonal elements). Defaults to the identity matrix}
 
+\item{covariance.model.iov}{a matrix of 0s and 1s indicating the structure of
+the IOV variance-covariance matrix Psi. Defaults to a zero matrix (no IOV)}
+
 \item{omega.init}{a square matrix of size equal to the number of parameters
 in the model, giving the initial estimate for the variance-covariance matrix
 of the model.}
+
+\item{omega.init.iov}{a square matrix giving the initial estimate for the IOV
+variance-covariance matrix Psi. Defaults to the identity matrix}
 
 \item{error.init}{a vector of size 2 giving the initial value of a and b in
 the error model. Defaults to 1 for each estimated parameter in the error

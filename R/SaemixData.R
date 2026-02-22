@@ -121,7 +121,9 @@ setClass(
     yorig="numeric",		# vector of responses in original dataset
     ind.gen="logical",	# vector of booleans (same size as name.covariates); TRUE=genetic covariate, FALSE=non-genetic covariates
     ntot.obs="numeric",		# total number of observations (=dim(tab)[1])
-    nind.obs="numeric"		# number of observations for each subject
+    nind.obs="numeric",		# number of observations for each subject
+    nocc="numeric",		# number of unique occasions (K in the IOV article)
+    nind.occ="numeric"		# number of occasions per subject
   ),
   validity=function(object){
     #    cat ("--- Checking SaemixData object ---\n")
@@ -422,6 +424,8 @@ setMethod(
     "ind.gen"={return(x@ind.gen)},
     "ntot.obs"={return(x@ntot.obs)},
     "nind.obs"={return(x@nind.obs)},
+    "nocc"={return(x@nocc)},
+    "nind.occ"={return(x@nind.occ)},
     stop("No such attribute\n")
    )
   }
@@ -457,6 +461,8 @@ setReplaceMethod(
     "yorig"={x@yorig<-value},
     "ntot.obs"={x@ntot.obs<-value},
     "nind.obs"={x@nind.obs<-value},
+    "nocc"={x@nocc<-value},
+    "nind.occ"={x@nind.occ<-value},
     stop("No such attribute\n")
    )
    validObject(x)

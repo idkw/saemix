@@ -65,6 +65,10 @@ An object of the SaemixData class, representing a longitudinal data structure, u
 \item{\code{ntot.obs}}{Object of class \code{"numeric"}: total number of observations}
 
 \item{\code{nind.obs}}{Object of class \code{"numeric"}: vector containing the number of observations for each subject}
+
+\item{\code{nind.occ}}{Object of class \code{"numeric"}: number of occasions per subject}
+
+\item{\code{nocc}}{Object of class \code{"numeric"}: number of unique occasions}
 }}
 
 \section{Objects from the Class}{

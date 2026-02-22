@@ -176,6 +176,33 @@ initialiseMainAlgo<-function(saemix.data,saemix.model,saemix.options) {
 	j0.covariate<-which(LCOV[ind.fix10,i0.omega2]==1)
 	flag.fmin<-as.integer(sum(covariate.estim0[1,])>0)
 	
+	# IOV (Inter-Occasion Variability) setup
+	occ<-saemix.data["data"][,"occ"]
+	nocc<-saemix.data["nocc"]
+	has.iov<-any(mydiag(saemix.model["covariance.model.iov"]) > 0)
+	i1.iov<-saemix.model["indx.iov"]
+	i0.iov<-setdiff(1:nb.parameters, i1.iov)
+	nb.iovas<-length(i1.iov)
+	indest.iov<-which(saemix.model["covariance.model.iov"] > 0)
+
+	if(has.iov) {
+		# Build mapping between observations and (subject, occasion) pairs
+		id.data<-saemix.data["data"][,"index"]
+		id.occ<-paste(id.data, occ, sep=".")
+		unique.id.occ<-unique(id.occ)
+		N.occ<-length(unique.id.occ)
+		# For each unique (subject, occasion), store the subject index and occasion index
+		id.of.idocc<-as.numeric(sub("\\..*", "", unique.id.occ))
+		occ.of.idocc<-as.numeric(sub(".*\\.", "", unique.id.occ))
+		# For each observation, store the index into unique.id.occ
+		idocc.of.obs<-match(id.occ, unique.id.occ)
+	} else {
+		N.occ<-0
+		id.of.idocc<-integer(0)
+		occ.of.idocc<-integer(0)
+		idocc.of.obs<-integer(0)
+	}
+
 	# using several Markov chains
 	chdat<-new(Class="SaemixRepData",data=saemix.data, nb.chains=saemix.options$nb.chains)
 	NM<-chdat["NM"]
@@ -239,33 +266,52 @@ initialiseMainAlgo<-function(saemix.data,saemix.model,saemix.options) {
 		ltest.phi<-length(itest.phi)
 	}
 
-	if(saemix.model["modeltype"]=="structural"){
 	var.eta<-mydiag(saemix.model["omega.init"])
-	theta0<-c(fixedpsi.ini,var.eta[i1.omega2],pres[saemix.model["indx.res"]])
+	var.iov.init<-if(has.iov) mydiag(saemix.model["omega.init.iov"])[i1.iov] else numeric(0)
+	if(saemix.model["modeltype"]=="structural"){
+	theta0<-c(fixedpsi.ini,var.eta[i1.omega2],var.iov.init,pres[saemix.model["indx.res"]])
 	l1<-betas.ini
 	l1[indx.betaI]<-transphi(matrix(l1[indx.betaI],nrow=1),saemix.model["transform.par"])
-	allpar0<-c(l1,var.eta[i1.omega2],pres[ind.res])
+	allpar0<-c(l1,var.eta[i1.omega2],var.iov.init,pres[ind.res])
 	} else {
-		var.eta<-mydiag(saemix.model["omega.init"])
-		theta0<-c(fixedpsi.ini,var.eta[i1.omega2])
+		theta0<-c(fixedpsi.ini,var.eta[i1.omega2],var.iov.init)
 		l1<-betas.ini
 		l1[indx.betaI]<-transphi(matrix(l1[indx.betaI],nrow=1),saemix.model["transform.par"])
-		allpar0<-c(l1,var.eta[i1.omega2])
+		allpar0<-c(l1,var.eta[i1.omega2],var.iov.init)
 	}
+	# IOV-related replicated data
+	if(has.iov) {
+		occM<-rep(occ, saemix.options$nb.chains)
+		id.occM<-rep(id.occ, saemix.options$nb.chains)
+		# Replicate idocc.of.obs for all chains, shifting indices
+		idocc.of.obsM<-rep(idocc.of.obs, saemix.options$nb.chains) + rep((0:(saemix.options$nb.chains-1))*N.occ, each=saemix.data["ntot.obs"])
+		# Replicate id.of.idocc and occ.of.idocc for all chains, shifting subject indices
+		id.of.idoccM<-rep(id.of.idocc, saemix.options$nb.chains) + rep((0:(saemix.options$nb.chains-1))*N, each=N.occ)
+		occ.of.idoccM<-rep(occ.of.idocc, saemix.options$nb.chains)
+		NM.occ<-N.occ * saemix.options$nb.chains
+	} else {
+		occM<-NULL; id.occM<-NULL; idocc.of.obsM<-NULL
+		id.of.idoccM<-NULL; occ.of.idoccM<-NULL; NM.occ<-0
+	}
+
 	# Data - passed on to functions, unchanged
 	Dargs<-list(IdM=IdM, XM=XM, yM=yM, NM=NM, N=N, nobs=saemix.data["ntot.obs"],
 							yobs=saemix.data["data"][,saemix.data["name.response"]],transform.par=saemix.model["transform.par"],
-							error.model=saemix.model["error.model"],structural.model=structural.model , etype.exp=which(saemix.model["error.model"] == "exponential"),modeltype=saemix.model["modeltype"])
+							error.model=saemix.model["error.model"],structural.model=structural.model , etype.exp=which(saemix.model["error.model"] == "exponential"),modeltype=saemix.model["modeltype"],
+							has.iov=has.iov, nocc=nocc, N.occ=N.occ, NM.occ=NM.occ,
+							occM=occM, id.occM=id.occM, idocc.of.obsM=idocc.of.obsM,
+							id.of.idoccM=id.of.idoccM, occ.of.idoccM=occ.of.idoccM)
 	
 	# List of indices and variables (fixed) - passed on to functions, unchanged
 	nb.parest<-sum(covariate.estim)+ sum(saemix.model["covariance.model"][upper.tri(saemix.model["covariance.model"], diag=TRUE)])+1+as.integer(saemix.model["error.model"]=="combined")
 	
-	Uargs<-list(nchains=saemix.options$nb.chains,nb.parameters=nb.parameters, nb.betas=nb.betas, nb.etas=nb.etas, 
+	Uargs<-list(nchains=saemix.options$nb.chains,nb.parameters=nb.parameters, nb.betas=nb.betas, nb.etas=nb.etas,
 				nb.parest=nb.parest,indx.betaC=indx.betaC, indx.betaI=indx.betaI, ind.res=ind.res,indest.omega=indest.omega,
 				i0.omega2=i0.omega2, i1.omega2=i1.omega2,j.covariate=j.covariate, j0.covariate=j0.covariate,
 				ind.fix10=ind.fix10, ind.fix11=ind.fix11, ind.fix1=ind.fix1, ind.fix0=ind.fix0,
-				MCOV0=MCOV0, COV=COV, COV0=COV0, COV1=COV1, LCOV=LCOV, COV2=COV2, dstatCOV=dstatCOV, 
-				Mcovariates=Mcovariates, ind.ioM=ind.ioM)
+				MCOV0=MCOV0, COV=COV, COV0=COV0, COV1=COV1, LCOV=LCOV, COV2=COV2, dstatCOV=dstatCOV,
+				Mcovariates=Mcovariates, ind.ioM=ind.ioM,
+				nb.iovas=nb.iovas, i1.iov=i1.iov, i0.iov=i0.iov, indest.iov=indest.iov)
 	# Variability-related elements
 	omega.eta<-omega[ind.eta,ind.eta] # IIV matrix for estimated parameters
 	varList<-list()
@@ -276,6 +322,14 @@ initialiseMainAlgo<-function(saemix.data,saemix.model,saemix.options) {
 	varList$MCOV=MCOV
 	varList$domega2<-do.call(cbind,rep(list((sqrt(mydiag(omega.eta)))*saemix.options$rw.ini),nb.etas))
 	varList$diag.omega<-mydiag(omega)
+	# IOV variance components
+	if(has.iov) {
+		varList$psi.iov<-saemix.model["omega.init.iov"]
+		varList$ind.iov<-i1.iov
+		varList$diag.psi<-mydiag(saemix.model["omega.init.iov"])
+		omega.iov.eta<-saemix.model["omega.init.iov"][i1.iov,i1.iov,drop=FALSE]
+		varList$domega2.iov<-do.call(cbind,rep(list((sqrt(mydiag(omega.iov.eta)))*saemix.options$rw.ini),nb.iovas))
+	}
 
 	# List of options and settings (fixed) - passed on to functions, unchanged
 	stepsize<-rep(1,saemix.options$nbiter.tot)
@@ -288,5 +342,14 @@ initialiseMainAlgo<-function(saemix.data,saemix.model,saemix.options) {
 						alpha0.sa=10^(-3/saemix.options$nbiter.sa),nbiter.saemix=saemix.options$nbiter.saemix,
 						maxim.maxiter=saemix.options$maxim.maxiter,flag.fmin=flag.fmin)
 	
-	return(list(saemix.model=saemix.model, Dargs=Dargs, Uargs=Uargs, varList=varList, opt=opt, DYF=DYF, phiM=phiM, mean.phi=mean.phi,betas=betas, fixedpsi.ini=fixedpsi.ini, allpar0=allpar0))
+	# IOV initialisation: gammaM and beta.occ
+	if(has.iov) {
+		gammaM<-matrix(0, nrow=NM.occ, ncol=nb.iovas)
+		beta.occ<-matrix(0, nrow=nocc, ncol=nb.parameters)
+	} else {
+		gammaM<-NULL
+		beta.occ<-NULL
+	}
+
+	return(list(saemix.model=saemix.model, Dargs=Dargs, Uargs=Uargs, varList=varList, opt=opt, DYF=DYF, phiM=phiM, mean.phi=mean.phi,betas=betas, fixedpsi.ini=fixedpsi.ini, allpar0=allpar0, gammaM=gammaM, beta.occ=beta.occ))
 }

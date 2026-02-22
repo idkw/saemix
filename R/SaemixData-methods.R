@@ -232,6 +232,11 @@ setMethod("readSaemix",
             nind.obs<-tapply(id,id,length) # individual numbers of observations (1xN)
             nind.obs<-nind.obs[match(unique(id),names(nind.obs))]
             object@nind.obs<-c(nind.obs)
+            # Compute occasion information for IOV
+            occ.per.subject<-tapply(dat[,"occ"], id, function(x) length(unique(x)))
+            occ.per.subject<-occ.per.subject[match(unique(id),names(occ.per.subject))]
+            object@nocc<-max(occ.per.subject)
+            object@nind.occ<-as.numeric(occ.per.subject)
             dat<-cbind(index=rep(1:object@N,times=nind.obs),dat)
             object@data<-dat
             
